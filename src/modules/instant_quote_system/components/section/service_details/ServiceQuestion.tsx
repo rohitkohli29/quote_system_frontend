@@ -5,33 +5,102 @@ import RadioInputField from "../../ui/RadioInputField";
 import ImageQuantityInputField from "../../ui/ImageQuantityInputField";
 import { addQuestionAnswer, decrementStep, incrementStep } from "../../../redux/reducers/userAnswerSlice";
 import { nextQuestion, previousQuestion } from "../../../redux/reducers/serviceQuestionsSlice";
-import { isEmpty } from "../../../helper/helper";
-import { useAnswerContext } from "../../../context/CurrentAnswerProvider";
+import { useState } from "react";
 
 const QuestionComponent = () => {
 
     // dispatch method for dispatching the actions.
     const dispatch = useDispatch<AppDispatch>();
+    const [answer,setAnswer] = useState<any>(null);
 
-    // using context for manage state for answer
-    const { answers, handleSetQuestionAnswer, setAnswerObjToNull } = useAnswerContext();
-
-    // Using data from [questions_slice] for ask the user
+    // set the user answer of the particular question
+    const handleSetAnswer = (
+        answer: string | any,
+        question_id: string,
+        service_id: string,
+        service_name: string,
+        question_text: string,
+        question_type: string,
+        question_label: string 
+    ) => {
+            setAnswer((prevAnswers: any) => {
+                // Check if we already have an answer for this question
+                if (prevAnswers && prevAnswers.question_id === question_id) {
+                    // If it's not a radio type question, handle multiple input fields
+                    if (question_type !== "radio") {
+                        // Go through existing answers and find if the label is already present
+                        const updatedAnswerArray = prevAnswers.answer.map(
+                            (item: any) => {
+                                // If the label exists, update the value
+                                if (item.question_label === question_label) {
+                                    return {
+                                        ...item,
+                                        question_ans: answer,
+                                    };
+                                }
+                                return item;
+                            }
+                        );
+    
+                        // Check if the label was found, if not, add a new one
+                        const isLabelExists = updatedAnswerArray.some(
+                            (item: any) => item.question_label === question_label
+                        );
+    
+                        // If the label is not in the array, we push a new object with the label and answer
+                        if (!isLabelExists) {
+                            updatedAnswerArray.push({
+                                question_label: question_label,
+                                question_ans: answer,
+                            });
+                        }
+    
+                        // Return the updated answer with the new or updated label
+                        return {
+                            ...prevAnswers,
+                            answer: updatedAnswerArray,
+                        };
+                    } else {
+                        // If it's a radio type question, we just update the answer directly (as a string)
+                        return {
+                            ...prevAnswers,
+                            answer: answer,
+                        };
+                    }
+                } else {
+                    // If there's no answer for this question yet, create a new one
+                    return {
+                        question_id,
+                        service_id,
+                        service_name,
+                        question_text,
+                        question_type,
+                        answer: question_type === "radio"
+                            ? answer // If it's a radio type, store answer as a string
+                            : [
+                                {
+                                    question_label: question_label, // For other types, store as array of objects
+                                    question_ans: answer,
+                                },
+                            ],
+                    };
+                }
+            });
+    }
 
     /**
      *  current_question:- hold the current ask question
      *  question_step_count:- they count the step [example:- 5 question , so they like this: 0, 1, 2,..5]
      *  total_question_length:- total_question that we need to ask the user [additon of all the services quesion]
     */
-
     const { current_question, question_step_count, total_question_length, question_history } = useSelector((state: RootState) => state.instant_quote.questions);
 
     // This function determine the component for user to select their answer
     const determineAnswerComp = (question_answer_type: string) => {
         switch (question_answer_type) {
-            case 'select': return <SelectInputField current_question={current_question!} setAnswer={handleSetQuestionAnswer} />;;
-            case 'radio': return <RadioInputField current_question={current_question!} setAnswer={handleSetQuestionAnswer} />;
-            case 'image_quantity_input_field': return <ImageQuantityInputField current_question={current_question!} setAnswer={handleSetQuestionAnswer} />
+            case 'select': return <SelectInputField current_question={current_question!} setAnswer={handleSetAnswer} />;;
+            case 'radio': return <RadioInputField current_question={current_question!} setAnswer={handleSetAnswer} />;
+            case 'image_quantity_input_field': return <ImageQuantityInputField current_question={current_question!} setAnswer={handleSetAnswer} />
             default: return null
         }
     }
@@ -64,10 +133,10 @@ const QuestionComponent = () => {
          */
         if (question_step_count < total_question_length - 1) {
             // if user not filled up the answer so show them alert.
-            if (!isEmpty(answers)) {
-                await dispatch(addQuestionAnswer(answers)); // add question_answer in question_answer slice
-                dispatch(nextQuestion(answers)); // change the question to next
-                setAnswerObjToNull(); // change the answer object to null
+            if (answer) {
+                await dispatch(addQuestionAnswer(answer)); // add question_answer in question_answer slice
+                dispatch(nextQuestion(answer));
+                setAnswer(null);
             } else {
                 alert('Please give your answer !');
             }
